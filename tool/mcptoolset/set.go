@@ -142,6 +142,14 @@ func httpClient(base *http.Client, provider auth.CredentialProvider) *http.Clien
 		c = *http.DefaultClient
 	}
 	c.Transport = &trackingTransport{base: c.Transport}
+	if c.CheckRedirect == nil {
+		// auth.Transport re-resolves and re-applies the credential on every hop,
+		// below the layer where net/http strips Authorization on a cross-host
+		// redirect, so following one would hand the credential to a host the
+		// caller never configured. Refuse to follow, as the ADC-backed client in
+		// auth/gcp already does; an operator policy wins when one is set.
+		c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	}
 	if provider != nil {
 		c.Transport = &auth.Transport{Provider: provider, Base: c.Transport}
 	}
